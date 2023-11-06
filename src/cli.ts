@@ -87,20 +87,30 @@ yargs.scriptName("@ordercloud/seeding")
     });
   })
   .command('download [filePath]', 'Create a local seed file from an existing marketplace.', (yargs) => {
-    yargs.option('id', {
+    yargs.option('clientID', {
       type: 'string',
       alias: 'i',
-      describe: 'Marketplace ID'
+      describe: 'Client ID'
     }),
     yargs.option('username', {
       type: 'string',
       alias: 'u',
-      describe: 'Portal username'
+      describe: 'Username'
     })
     yargs.option('password', {
       type: 'string',
       alias: 'p',
-      describe: 'Portal password'
+      describe: 'Password'
+    })
+    yargs.option('clientsecret', {
+      type: 'string',
+      alias: 's',
+      describe: 'Client Secret'
+    })
+    yargs.option('scope', {
+      type: 'string',
+      alias: 's',
+      describe: 'Client Secret'
     })
     yargs.positional('fileName', {
       type: 'string',
@@ -113,7 +123,7 @@ yargs.scriptName("@ordercloud/seeding")
     var data = await download({
       username: argv.u as string,
       password: argv.p as string,
-      marketplaceID: argv.i as string, 
+      clientID: argv.i as string, 
     });
     if (data) {
       var path = argv.f as string ?? 'ordercloud-seed.yml';

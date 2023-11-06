@@ -1,21 +1,21 @@
-import Portal from '../services/portal'; // why do I have to add the .js here?
-import { Configuration, InventoryRecords, Product, Products, Tokens } from 'ordercloud-javascript-sdk';
-import { SerializedMarketplace } from '../models/serialized-marketplace';
-import OrderCloudBulk from '../services/ordercloud-bulk';
-import { defaultLogger, LogCallBackFunc, MessageType } from '../services/logger';
-import { BuildResourceDirectory } from '../models/oc-resource-directory';
-import { OCResource } from '../models/oc-resources';
-import _  from 'lodash';
-import { MARKETPLACE_ID as MARKETPLACE_ID_PLACEHOLDER, REDACTED_MESSAGE, TEN_MINUTES } from '../constants';
-import PortalAPI from '../services/portal';
 import Bottleneck from 'bottleneck';
+import _ from 'lodash';
+import { Tokens } from 'ordercloud-javascript-sdk';
+import { MARKETPLACE_ID as MARKETPLACE_ID_PLACEHOLDER, REDACTED_MESSAGE, TEN_MINUTES } from '../constants';
+import { BuildResourceDirectory } from '../models/oc-resource-directory';
 import { OCResourceEnum } from '../models/oc-resource-enum';
+import { OCResource } from '../models/oc-resources';
+import { SerializedMarketplace } from '../models/serialized-marketplace';
+import { LogCallBackFunc, MessageType, defaultLogger } from '../services/logger';
+import OrderCloudAPI from '../services/ordercloud'; // why do I have to add the .js here?
+import OrderCloudBulk from '../services/ordercloud-bulk';
+import PortalAPI from '../services/portal';
 import { RefreshTimer } from '../services/refresh-timer';
 
 export interface DownloadArgs {
     username?: string; 
     password?: string; 
-    marketplaceID: string; 
+    clientID: string; 
     portalToken?: string;
     logger?: LogCallBackFunc
 }
@@ -24,50 +24,39 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
     var { 
         username, 
         password, 
-        marketplaceID, 
+        clientID, 
         portalToken,
         logger = defaultLogger
     } = args;
    
-    if (!marketplaceID) {
-        return logger(`Missing required argument: marketplaceID`, MessageType.Error);
+    if (!clientID) {
+        return logger(`Missing required argument: clientID`, MessageType.Error);
     }
 
     // Authenticate
-    var portal = new PortalAPI();
-    var portalRefreshToken: string;
-    var org_token: string;
+    var oc = new OrderCloudAPI();
+    var ocToken: string;
+    var ocRefreshToken: string;
     var userLoginAuthUsed = _.isNil(portalToken);
     if (userLoginAuthUsed) {
         if (_.isNil(username) || _.isNil(password)) {
             return logger(`Missing required arguments: username and password`, MessageType.Error)
         }
         try {
-            var portalTokenData = await portal.login(username, password);
-            portalToken = portalTokenData.access_token;
-            portalRefreshToken = portalTokenData.refresh_token;
+            var roles = ['FullAccess']; // TODO: replace with parameter
+            var orderCloudToken = await oc.login(username, password, clientID, roles);
+            ocToken = orderCloudToken.access_token;
+            ocRefreshToken = orderCloudToken.refresh_token;
+            logger(`OC Token: ${orderCloudToken.access_token}`, MessageType.Success);
+            // var portalTokenData = await portal.login(username, password);
             RefreshTimer.set(refreshTokenFunc, TEN_MINUTES)
-        } catch {
-            return logger(`Username \"${username}\" and Password \"${password}\" were not valid`, MessageType.Error)
+        } catch (e) {
+            return logger(`Username \"${username}\" and Password \"${password}\" were not valid ${e}`, MessageType.Error)
         }
     }
-    try {
-        org_token = await portal.getOrganizationToken(marketplaceID, portalToken);
-        
-        var organization = await portal.GetOrganization(marketplaceID, portalToken);        
-        if(!organization)
-        {
-            return logger(`Couldn't get the marketplace with ID \"${marketplaceID}\".`, MessageType.Error);            
-        }
+    Tokens.SetAccessToken(ocToken);
 
-        Configuration.Set({ baseApiUrl: organization.CoreApiUrl });
-    } catch (e) {
-        return logger(`Marketplace with ID \"${marketplaceID}\" not found`, MessageType.Error)
-    }
-
-    Tokens.SetAccessToken(org_token);
-
-    logger(`Found your Marketplace \"${marketplaceID}\". Beginning download.`, MessageType.Success);
+    logger(`Successfully authenticated. Beginning download.`, MessageType.Success);
 
     // Pull Data from Ordercloud
     var ordercloudBulk = new OrderCloudBulk(new Bottleneck({
@@ -83,7 +72,7 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
         }
         var records = await ordercloudBulk.ListAll(resource);
         RedactSensitiveFields(resource, records);
-        PlaceHoldMarketplaceID(resource, records);
+        //PlaceHoldMarketplaceID(resource, records);
         if (resource.downloadTransformFunc !== undefined) {
             records = records.map(resource.downloadTransformFunc)
         }
@@ -98,7 +87,7 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
                 if (childResource.shouldAttemptListFunc(parentRecord)) {
                     var childRecords = await ordercloudBulk.ListAll(childResource, parentRecord.ID); // assume ID exists. Which is does for all parent types.
                     childResourceRecordCounts[childResourceName] += childRecords.length;
-                    PlaceHoldMarketplaceID(childResource, childRecords);
+                    //PlaceHoldMarketplaceID(childResource, childRecords);
                     if (childResource.downloadTransformFunc !== undefined) {
                         childRecords = childRecords.map(childResource.downloadTransformFunc)
                     }
@@ -111,7 +100,7 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
                         for (var variant of childRecords) {
                             var variantInventoryRecords = await ordercloudBulk.ListAll(grandChildResource, parentRecord.ID, variant.ID);
                             childResourceRecordCounts[OCResourceEnum.VariantInventoryRecords] += variantInventoryRecords.length;
-                            PlaceHoldMarketplaceID(grandChildResource, variantInventoryRecords);
+                            //PlaceHoldMarketplaceID(grandChildResource, variantInventoryRecords);
                             for (let grandChildRecord of variantInventoryRecords) {
                                 grandChildRecord["ProductID"] = parentRecord.ID;
                                 grandChildRecord["VariantID"] = variant.ID;
@@ -128,7 +117,7 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
         }
     }
     // Write to file
-    logger(`Done downloading data from org \"${marketplaceID}\".`, MessageType.Success);
+    //logger(`Done downloading data from org \"${marketplaceID}\".`, MessageType.Success);
     return marketplace;
 
     function RedactSensitiveFields(resource: OCResource, records: any[]): void {
@@ -143,26 +132,25 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
         }
     }
 
-    function PlaceHoldMarketplaceID(resource: OCResource, records: any[]): void {
-        if (resource.hasOwnerIDField) {
-            for (var record of records) {  
-                // when Sandbox and Staging were created, marketplace IDs were appended with env to keep them unique
-                var mktplID = marketplaceID.replace(/_Sandbox$/, "").replace(/_Staging$/, "");
-                if (record[resource.hasOwnerIDField] === mktplID) {
-                    record[resource.hasOwnerIDField] = MARKETPLACE_ID_PLACEHOLDER;
-                }
-            }
-        }
-    }
+    // why are we doing this?
+    // function PlaceHoldMarketplaceID(resource: OCResource, records: any[]): void {
+    //     if (resource.hasOwnerIDField) {
+    //         for (var record of records) {  
+    //             // when Sandbox and Staging were created, marketplace IDs were appended with env to keep them unique
+    //             var mktplID = marketplaceID.replace(/_Sandbox$/, "").replace(/_Staging$/, "");
+    //             if (record[resource.hasOwnerIDField] === mktplID) {
+    //                 record[resource.hasOwnerIDField] = MARKETPLACE_ID_PLACEHOLDER;
+    //             }
+    //         }
+    //     }
+    // }
 
     async function refreshTokenFunc() {
-        logger(`Refreshing the access token for Marketplace \"${marketplaceID}\". This should happen every 10 mins.`, MessageType.Warn)
+        logger(`Refreshing the access token for. This should happen every 10 mins.`, MessageType.Warn)
   
-        const portalTokenData = await portal.refreshToken(portalRefreshToken);
-        portalToken = portalTokenData.access_token;
-        portalRefreshToken = portalTokenData.refresh_token;
-
-        org_token = await portal.getOrganizationToken(marketplaceID, portalToken);
-        Tokens.SetAccessToken(org_token);
+        const ocTokenData = await oc.refreshToken(ocRefreshToken, clientID);
+        ocToken = ocTokenData.access_token;
+        ocRefreshToken = ocTokenData.refresh_token;
+        Tokens.SetAccessToken(ocToken);
     }
 } 
