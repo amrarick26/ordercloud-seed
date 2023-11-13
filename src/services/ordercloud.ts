@@ -1,4 +1,4 @@
-import { Auth, AccessToken, Configuration } from 'ordercloud-javascript-sdk';
+import { Auth, AccessToken, Configuration, ApiRole } from 'ordercloud-javascript-sdk';
 
 export default class OrderCloudAPI {
     constructor() {
@@ -6,8 +6,12 @@ export default class OrderCloudAPI {
           baseApiUrl: "https://sandboxapi.ordercloud.io"
         })
       }
-      
-    async login(username, password, clientID, scope): Promise<AccessToken> {
+    
+    async clientCredentials(clientSecret: string, clientID: string, scope: ApiRole[]): Promise<AccessToken> {
+      return await Auth.ClientCredentials(clientSecret, clientID, scope);
+    }
+
+    async login(username: string, password: string, clientID: string, scope: ApiRole[]): Promise<AccessToken> {
         return await Auth.Login(username, password, clientID, scope)
     }
 

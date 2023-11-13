@@ -1,58 +1,68 @@
 import Bottleneck from 'bottleneck';
 import _ from 'lodash';
-import { Tokens } from 'ordercloud-javascript-sdk';
-import { MARKETPLACE_ID as MARKETPLACE_ID_PLACEHOLDER, REDACTED_MESSAGE, TEN_MINUTES } from '../constants';
+import { AccessToken, ApiRole, Tokens } from 'ordercloud-javascript-sdk';
+import { REDACTED_MESSAGE, TEN_MINUTES } from '../constants';
 import { BuildResourceDirectory } from '../models/oc-resource-directory';
 import { OCResourceEnum } from '../models/oc-resource-enum';
 import { OCResource } from '../models/oc-resources';
 import { SerializedMarketplace } from '../models/serialized-marketplace';
 import { LogCallBackFunc, MessageType, defaultLogger } from '../services/logger';
-import OrderCloudAPI from '../services/ordercloud'; // why do I have to add the .js here?
+import OrderCloudAPI from '../services/ordercloud';
 import OrderCloudBulk from '../services/ordercloud-bulk';
-import PortalAPI from '../services/portal';
 import { RefreshTimer } from '../services/refresh-timer';
 
 export interface DownloadArgs {
+    grantType?: string;
+    clientID?: string; 
     username?: string; 
     password?: string; 
-    clientID: string; 
-    portalToken?: string;
+    clientSecret?: string;
+    token?: string;
+    scope?: string
     logger?: LogCallBackFunc
 }
 
 export async function download(args: DownloadArgs): Promise<SerializedMarketplace | void> {
     var { 
+        grantType,
+        clientID, 
         username, 
         password, 
-        clientID, 
-        portalToken,
+        clientSecret,
+        scope,
+        token,
         logger = defaultLogger
     } = args;
-   
-    if (!clientID) {
-        return logger(`Missing required argument: clientID`, MessageType.Error);
-    }
-
     // Authenticate
     var oc = new OrderCloudAPI();
+    var tokenResponse: AccessToken;
     var ocToken: string;
     var ocRefreshToken: string;
-    var userLoginAuthUsed = _.isNil(portalToken);
+    var userLoginAuthUsed = _.isNil(token);
     if (userLoginAuthUsed) {
-        if (_.isNil(username) || _.isNil(password)) {
+        if (!clientID) {
+            return logger(`Missing required argument: clientID`, MessageType.Error);
+        }
+        var ocRoles: ApiRole[] = scope.split(',') as ApiRole[];
+
+        if (grantType == "password" && (_.isNil(username) || _.isNil(password))) 
             return logger(`Missing required arguments: username and password`, MessageType.Error)
-        }
+        
+        if (grantType == "client_credentials" && _.isNil(clientSecret))
+            return logger(`Missing required arguments: clientSecret`, MessageType.Error)
+
         try {
-            var roles = ['FullAccess']; // TODO: replace with parameter
-            var orderCloudToken = await oc.login(username, password, clientID, roles);
-            ocToken = orderCloudToken.access_token;
-            ocRefreshToken = orderCloudToken.refresh_token;
-            logger(`OC Token: ${orderCloudToken.access_token}`, MessageType.Success);
-            // var portalTokenData = await portal.login(username, password);
-            RefreshTimer.set(refreshTokenFunc, TEN_MINUTES)
-        } catch (e) {
-            return logger(`Username \"${username}\" and Password \"${password}\" were not valid ${e}`, MessageType.Error)
+            tokenResponse = grantType == "password" ? await oc.login(username, password, clientID, ocRoles) : await oc.clientCredentials(clientSecret, clientID, ocRoles);
+        } catch (ex) {
+            return logger(`There was an error authenticating with the given credentials`, MessageType.Error);
         }
+    
+        ocToken = tokenResponse?.access_token;
+        ocRefreshToken = tokenResponse?.refresh_token;
+        RefreshTimer.set(refreshTokenFunc, TEN_MINUTES)
+
+    } else {
+        ocToken = token;
     }
     Tokens.SetAccessToken(ocToken);
 
