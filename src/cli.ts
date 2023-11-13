@@ -18,30 +18,45 @@ yargs.scriptName("@ordercloud/seeding")
       default: 'ordercloud-seed.yml',
       describe: 'Local file name or HTTP(S) link'
     });
+    yargs.option('grantType', {
+      type: 'string',
+      alias: 'g',
+      describe: 'Grant Type'
+    }),
+    yargs.option('clientID', {
+      type: 'string',
+      alias: 'i',
+      describe: 'Client ID'
+    }),
     yargs.option('username', {
       type: 'string',
       alias: 'u',
-      describe: 'Portal username'
+      describe: 'Username'
     })
     yargs.option('password', {
       type: 'string',
       alias: 'p',
-      describe: 'Portal password'
+      describe: 'Password'
     })
-    yargs.option('id', {
+    yargs.option('clientSecret', {
       type: 'string',
-      alias: 'i',
-      describe: 'Marketplace ID'
-    }),
-    yargs.option('name', {
-      type: 'string',
-      alias: 'n',
-      describe: 'Marketplace Name'
-    }),
-    yargs.option('regionId', {
+      alias: 's',
+      describe: 'Client Secret'
+    })
+    yargs.option('scope', {
       type: 'string',
       alias: 'r',
-      describe: 'Region for the marketplace. See the API docs for more information'
+      describe: 'Scope'
+    })
+    yargs.option('token', {
+      type: 'string',
+      alias: 't',
+      describe: 'OrderCloud Access Token'
+    })
+    yargs.option('environment', {
+      type: 'string',
+      alias: 'e',
+      describe: 'OrderCloud Environment'
     })
   }, function (argv) {
     var dataUrl = argv.d as string;
@@ -63,11 +78,14 @@ yargs.scriptName("@ordercloud/seeding")
       try {
         var data = yaml.load(stringData) as SerializedMarketplace;
         seed({
+          grantType: argv.g as string,
+          clientID: argv.i as string,
           username: argv.u as string,
           password: argv.p as string,
-          marketplaceID: argv.i as string,
-          marketplaceName: argv.n as string,
-          regionId: argv.r as string,
+          clientSecret: argv.s as string,
+          scope: argv.r as string,
+          token: argv.t as string,
+          environment: argv.e as string,
           rawData: data
         });
         return;
@@ -78,11 +96,14 @@ yargs.scriptName("@ordercloud/seeding")
       }
     }
     seed({
+      grantType: argv.g as string,
+      clientID: argv.i as string,
       username: argv.u as string,
       password: argv.p as string,
-      marketplaceID: argv.i as string,
-      marketplaceName: argv.n as string,
-      regionId: argv.r as string,
+      clientSecret: argv.s as string,
+      scope: argv.r as string,
+      token: argv.t as string,
+      environment: argv.e as string,
       dataUrl: dataUrl as string
     });
   })
@@ -122,6 +143,11 @@ yargs.scriptName("@ordercloud/seeding")
       alias: 't',
       describe: 'OrderCloud Access Token'
     })
+    yargs.option('environment', {
+      type: 'string',
+      alias: 'e',
+      describe: 'OrderCloud Environment'
+    })
     yargs.positional('fileName', {
       type: 'string',
       alias: 'f',
@@ -138,6 +164,7 @@ yargs.scriptName("@ordercloud/seeding")
       clientSecret: argv.s as string,
       scope: argv.r as string,
       token: argv.t as string,
+      environment: argv.e as string,
     });
     if (data) {
       var path = argv.f as string ?? 'ordercloud-seed.yml';

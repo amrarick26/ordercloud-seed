@@ -17,8 +17,9 @@ export interface DownloadArgs {
     username?: string; 
     password?: string; 
     clientSecret?: string;
-    token?: string;
     scope?: string
+    token?: string;
+    environment: string;
     logger?: LogCallBackFunc
 }
 
@@ -31,10 +32,13 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
         clientSecret,
         scope,
         token,
+        environment,
         logger = defaultLogger
     } = args;
-    // Authenticate
-    var oc = new OrderCloudAPI();
+    // Authenticate to OrderCloud
+    if (!environment) 
+        return logger('Missing required argument: environment. Possible values are Sandbox, Staging, or Production', MessageType.Error);
+    var oc = new OrderCloudAPI(environment);
     var tokenResponse: AccessToken;
     var ocToken: string;
     var ocRefreshToken: string;
@@ -49,7 +53,7 @@ export async function download(args: DownloadArgs): Promise<SerializedMarketplac
             return logger(`Missing required arguments: username and password`, MessageType.Error)
         
         if (grantType == "client_credentials" && _.isNil(clientSecret))
-            return logger(`Missing required arguments: clientSecret`, MessageType.Error)
+            return logger(`Missing required argument: clientSecret`, MessageType.Error)
 
         try {
             tokenResponse = grantType == "password" ? await oc.login(username, password, clientID, ocRoles) : await oc.clientCredentials(clientSecret, clientID, ocRoles);

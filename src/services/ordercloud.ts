@@ -1,9 +1,24 @@
 import { Auth, AccessToken, Configuration, ApiRole } from 'ordercloud-javascript-sdk';
 
 export default class OrderCloudAPI {
-    constructor() {
-        Configuration.Set({ // TODO: need to make this dynamic
-          baseApiUrl: "https://sandboxapi.ordercloud.io"
+    constructor(environment: string) {
+        var baseApiUrl: string;
+        switch(environment.toLocaleLowerCase()) {
+          case "sandbox":
+            baseApiUrl = "https://sandboxapi.ordercloud.io";
+            break;
+          case "production":
+            baseApiUrl =  "https://api.ordercloud.io";
+            break;
+          case "staging":
+            baseApiUrl =  "https://stagingapi.ordercloud.io";
+            break;
+          default:
+            baseApiUrl =  "https://sandboxapi.ordercloud.io";
+            break;
+        }
+        Configuration.Set({
+          baseApiUrl
         })
       }
     
